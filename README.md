@@ -1,8 +1,18 @@
-# Face Anonymization Made Simple (WACV 2025)
+<div align="center">
 
-[arXiv](http://arxiv.org/abs/2411.00762)
+<h1>Face Anonymization Made Simple</h1>
+
+[Han-Wei Kung](https://hanweikung.github.io)<sup>1</sup> · [Tuomas Varanka](https://scholar.google.com/citations?user=5QWyHT4AAAAJ&hl=en)<sup>2</sup> · [Sanjay Saha](https://scholar.google.com/citations?user=prPfgTIAAAAJ&hl=en)<sup>3</sup> · [Terence Sim](https://scholar.google.com/citations?user=AdEsZwsAAAAJ&hl=en)<sup>3</sup> · [Nicu Sebe](https://scholar.google.com/citations?user=stFCYOAAAAAJ&hl=en)<sup>1</sup>
+
+<sup>1</sup> University of Trento | <sup>2</sup> University of Oulu | <sup>3</sup> National University of Singapore
+
+[![arXiv](https://img.shields.io/badge/arXiv-2411.00762-b31b1b?logo=arxiv&logoColor=white)](http://arxiv.org/abs/2411.00762) [![Project Page](https://img.shields.io/badge/Project-Page-blue?logo=firefox&logoColor=white)](https://hanweikung.github.io/face_anon_simple/) [![WACV 2025](https://img.shields.io/badge/WACV%202025-Oral-gold)](https://wacv2025.thecvf.com/)
+
+Accepted for **oral presentation** at [WACV 2025](https://wacv2025.thecvf.com/).
 
 ![teaser](teaser.jpg)
+
+</div>
 
 Our face anonymization technique preserves the original facial expressions, head positioning, eye direction, and background elements, effectively masking identity while retaining other crucial details. The anonymized face blends seamlessly into its original photograph, making it ideal for diverse real-world applications.
 
