@@ -6,7 +6,8 @@ https://github.com/hanweikung/face_anon_simple/tree/main
 - redaction with black, pixel or blur
 - anonymization of multiple faces in an image
 - swapping face in image A with face from image B 
-- 
+-     # options: single_align, multiple_align, combine, swap, redact
+
 ## Citations 
 ```bibtex
 @InProceedings{Kung_2025_WACV,

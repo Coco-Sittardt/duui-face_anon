@@ -1,10 +1,14 @@
 import argparse
+import base64
+from io import BytesIO
 
+from pydantic import BaseModel
 import face_alignment
 import torch
 from PIL import Image
 from transformers import CLIPImageProcessor, CLIPVisionModel
-
+from fastapi import FastAPI, Response
+from starlette.responses import JSONResponse, PlainTextResponse
 from diffusers import AutoencoderKL, DDPMScheduler
 from diffusers.utils import load_image
 from diffusers.models.referencenet.referencenet_unet_2d_condition import (
@@ -19,150 +23,43 @@ from utils.redact_faces import redact_faces_in_image
 
 # todo this from lua
 # creating and loading models
-face_model_id = "hkung/face-anon-simple"
-clip_model_id = "openai/clip-vit-large-patch14"
-sd_model_id = "stabilityai/stable-diffusion-2-1"
-
-unet = UNet2DConditionModel.from_pretrained(
-    face_model_id, subfolder="unet", use_safetensors=True
-)
-referencenet = ReferenceNetModel.from_pretrained(
-    face_model_id, subfolder="referencenet", use_safetensors=True
-)
-conditioning_referencenet = ReferenceNetModel.from_pretrained(
-    face_model_id, subfolder="conditioning_referencenet", use_safetensors=True
-)
-vae = AutoencoderKL.from_pretrained(sd_model_id, subfolder="vae", use_safetensors=True)
-scheduler = DDPMScheduler.from_pretrained(
-    sd_model_id, subfolder="scheduler", use_safetensors=True
-)
-feature_extractor = CLIPImageProcessor.from_pretrained(
-    clip_model_id, use_safetensors=True
-)
-image_encoder = CLIPVisionModel.from_pretrained(clip_model_id, use_safetensors=True)
-
-pipe = StableDiffusionReferenceNetPipeline(
-    unet=unet,
-    referencenet=referencenet,
-    conditioning_referencenet=conditioning_referencenet,
-    vae=vae,
-    feature_extractor=feature_extractor,
-    image_encoder=image_encoder,
-    scheduler=scheduler,
-)
-pipe = pipe.to("cuda")
-
-# todo manual seed from input
-generator = torch.manual_seed(1)
-
-# todo adjust this to take the Lua arguments and parse them
-def parse_args():
-    parser = argparse.ArgumentParser(description="Inference")
-    # todo arg model diffusion
-    parser.add_argument(
-        "--pretrained_model_name_or_path",
-        type=str,
-        default="stabilityai/stable-diffusion-2-1",
-        required=False,
-        help="Path to pretrained model or model identifier from huggingface.co/models.",
-    )
-    # todo arg model clip
-    parser.add_argument(
-        "--pretrained_clip_model_name_or_path",
-        type=str,
-        default="openai/clip-vit-large-patch14",
-        required=False,
-        help="Path to pretrained CLIP model or model identifier from huggingface.co/models.",
-    )
-
-    parser.add_argument(
-        "--model_path",
-        type=str,
-        default=None,
-        required=True,
-        help="Path to the model trained by yourself",
-    )
-    parser.add_argument(
-        "--dataset_loading_script_path",
-        type=str,
-        default=None,
-        required=True,
-        help="Path to the dataset loading script file",
-    )
-    parser.add_argument(
-        "--output_dir",
-        type=str,
-        default="./test-infer/",
-        help="The output directory where predictions are saved",
-    )
-    # todo arg resulution
-    parser.add_argument(
-        "--resolution",
-        type=int,
-        default=512,
-        help="The resolution for input images, all the images in the test dataset will be resized to this resolution",
-    )
-    # todo some other args (scale, seed etc)
-    parser.add_argument("--guidance_scale", type=float, default=2.5)
-    parser.add_argument("--num_inference_steps", type=int, default=50)
-    parser.add_argument("--seed", type=int, default=None, help="A seed for reproducible inference.")
-    parser.add_argument(
-        "--anonymization_degree_start",
-        type=float,
-        default=0.0,
-        help="Increasing the anonymization scale value encourages the model to produce images that diverge significantly from the conditioning image.",
-    )
-    parser.add_argument("--anonymization_degree_end", type=float, default=0.0)
-    parser.add_argument("--num_anonymization_degrees", type=int, default=1)
-    parser.add_argument(
-        "--center_crop",
-        default=False,
-        action="store_true",
-        help=(
-            "Whether to center crop the input images to the resolution. If not set, the images will be randomly"
-            " cropped. The images will be resized to the resolution first before cropping."
-        ),
-    )
-    parser.add_argument(
-        "--max_test_samples",
-        type=int,
-        default=None,
-        help="Truncate the number of test examples to this value if set.",
-    )
-    # todo arg vis input
-    parser.add_argument(
-        "--vis_input",
-        action="store_true",
-        help="If set, save the input and generated images together as a single output image for easy visualization",
-    )
-    parser.add_argument(
-        "--test_batch_size",
-        type=int,
-        default=1,
-        help=(
-            "The batch size for the test dataloader per device should be set to 1."
-            "This setting does not affect performance, no matter how large the batch size is."
-        ),
-    )
-    parser.add_argument(
-        "--dataloader_num_workers",
-        type=int,
-        default=0,
-        help=(
-            "Number of subprocesses to use for data loading. 0 means that the data will be loaded in the main process."
-        ),
-    )
-
-    args = parser.parse_args()
-    return args
 
 
+# --- duui
+
+class ImageType(BaseModel):
+    src: str
+    height: int
+    width: int
+    begin: int
+    end: int
+class DUUIRequest(BaseModel):
+    anon_type: str
+    anon_degree: float
+    images: dict[int, InputImage]
+    redact_type: str
+    blur: int
+    pixel: int
+    diffusion_model: str
+    clip_model: str
+    seed: int
+    guidance: float
+    inference_steps: int
+    vis_input: bool
+    height: int
+    width: int
+class DUUIResponse(BaseModel):
+    output_images: dict[int, InputImage]
+
+
+
+# ===== All the different options =====
 def single_aligned_face(source_image,
-                        inference_steps=25,
-                        guidance_sclae=4.0,
-                        anonymization_degree=1.25,
-                        height=512,
-                        width=512, vis_input=False)-> Image:
+                        inference_steps,
+                        guidance_sclae,
+                        anonymization_degree,
+                        height,
+                        width, vis_input)-> Image:
     """
 
     :param source_image: image to be anonymized
@@ -194,10 +91,10 @@ def single_aligned_face(source_image,
 
 def multiple_aligned_face(
         source_image,
-        image_size=512,
-        inference_steps=25,
-        guidance_scale=4.0,
-        anonymization_degree=1.25,
+        image_size,
+        inference_steps,
+        guidance_scale,
+        anonymization_degree,
 )->Image:
     """
 
@@ -246,12 +143,12 @@ def combine_images(images):
 def swap_faces(
         source_image,
         conditioning_image,
-        inference_steps=200,
-        guidance_scale=4.0,
-        anonymization_degree=0.00,
-        width=512,
-        height=512,
-        vis_input=False,
+        inference_steps,
+        guidance_scale,
+        anonymization_degree,
+        width,
+        height,
+        vis_input,
     ):
     """
     
@@ -283,11 +180,11 @@ def swap_faces(
 
 def redact_faces(
         source_image,
-        image_size=512,
-        redaction_method="blur",
-        blur_strength=51,
-        pixel_size=16,
-        vis_input=False,
+        image_size,
+        redaction_method,
+        blur_strength,
+        pixel_size,
+        vis_input,
     )->Image:
     """
 
@@ -310,3 +207,162 @@ def redact_faces(
     if vis_input:
         return combine_images([redact_image, source_image])
     return redact_image
+
+def pil_to_b64(image):
+    buffer = BytesIO()
+    image.save(buffer, format="PNG")
+    return base64.b64encode(buffer.getvalue()).decode("utf-8")
+
+def b64_to_pil(b64_str):
+    img_bytes = base64.b64decode(b64_str)
+    return Image.open(BytesIO(img_bytes)).convert("RGB")
+
+# === the container
+app = FastAPI(
+    openapi_url="/openapi.json",
+    docs_url="/api",
+    redoc_url=None,
+    terms_of_service="https://www.texttechnologylab.org/legal_notice/",
+    title="duui-face_anon",
+    description="Implementation of [WACV 2025] 'Face Anonymization Made Simple' for DUUI.",
+    version="0.1",
+        contact={
+            "name": "Coco Sittardt",
+            "url": "https://texttechnologylab.org",
+            "email": "sittardt@em.uni-frankfurt.de",
+        },
+        license_info={
+            "name": "AGPL",
+            "url": "http://www.gnu.org/licenses/agpl-3.0.en.html",
+        },
+)
+
+
+
+@app.on_event("startup")
+def startup():
+    global pipe, generator
+    # todo adjust so this takes other pretrained from duui
+    face_model_id = "hkung/face-anon-simple"
+    clip_model_id = "openai/clip-vit-large-patch14"
+    sd_model_id = "stabilityai/stable-diffusion-2-1"
+
+    unet = UNet2DConditionModel.from_pretrained(
+        face_model_id, subfolder="unet", use_safetensors=True
+    )
+    referencenet = ReferenceNetModel.from_pretrained(
+        face_model_id, subfolder="referencenet", use_safetensors=True
+    )
+    conditioning_referencenet = ReferenceNetModel.from_pretrained(
+        face_model_id, subfolder="conditioning_referencenet", use_safetensors=True
+    )
+    vae = AutoencoderKL.from_pretrained(sd_model_id, subfolder="vae", use_safetensors=True)
+    scheduler = DDPMScheduler.from_pretrained(
+        sd_model_id, subfolder="scheduler", use_safetensors=True
+    )
+    feature_extractor = CLIPImageProcessor.from_pretrained(
+        clip_model_id, use_safetensors=True
+    )
+    image_encoder = CLIPVisionModel.from_pretrained(clip_model_id, use_safetensors=True)
+
+    pipe = StableDiffusionReferenceNetPipeline(
+        unet=unet,
+        referencenet=referencenet,
+        conditioning_referencenet=conditioning_referencenet,
+        vae=vae,
+        feature_extractor=feature_extractor,
+        image_encoder=image_encoder,
+        scheduler=scheduler,
+    )
+    pipe = pipe.to("cuda")
+
+    # todo manual seed from input
+    generator = torch.manual_seed(1)
+    print(f"CUDA available: {torch.cuda.is_available()}")
+    print(f"Device: {torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'CPU'}")
+
+
+
+@app.get("/v1/details/input_output")
+def get_input_output()-> JSONResponse:
+    json_item = {
+       "inputs" : ["org.texttechnologylab.annotation.type.Image"],
+        "outputs" : ["org.texttechnologylab.annotation.type.Image"]
+    }
+    json_compatible_item_data = jsonable_encoder(json_item)
+    return JSONResponse(content=json_compatible_item_data)
+
+
+#Load the predefined typesystem that is needed for this annotator to work
+typesystem_filename = 'resources/typesystem_face_anon.xml'
+with open(typesystem_filename, 'rb') as f:
+    typesystem = f.read()
+# Get typesystem of this annotator
+@app.get("/v1/typesystem")
+def get_typesystem() -> Response:
+    return Response(
+        content=typesystem,
+        media_type="application/xml"
+    )
+
+
+# Load the Lua communication script
+communication = "resources/communication.lua"
+with open(communication, 'rb') as f:
+    communication = f.read().decode("utf-8")
+
+# Return Lua communication script
+@app.get("/v1/communication_layer", response_class=PlainTextResponse)
+def get_communication_layer() -> str:
+    return communication
+
+@app.post("/v1/process")
+def post_process(request:DUUIRequest)-> DUUIResponse:
+    """
+
+
+    """
+    # the base selection between which anonymization is run
+    anon_type = request.anon_type
+    # the amount of anonymization
+    anon_degree = request.anon_degree
+    # input images
+    images = request.images
+    # set if the anon_type is redaction, then can choose again between blur, black or pixel
+    redact_type = request.redact_type
+    blur = request.blur
+    pixel = request.pixel
+    diffusion_model = request.diffusion_model
+    clip_model = request.clip_model
+    seed = request.seed
+    guidance = request.guidance
+    inference_steps = request.inference_steps
+    vis_input = request.vis_input
+    height = request.height
+    width = request.width
+
+    output_images = {}
+
+    # selection between the different anon types:
+    # options: single_align, multiple_align, combine, swap, redact
+    match anon_type:
+        # only one image
+        case "single_align":
+            input_img = images[1]
+            output = single_aligned_face(
+                source_image=b64_to_pil(input_img.src),
+                inference_steps=inference_steps,
+                guidance_sclae=guidance,
+                anonymization_degree=anon_degree,
+                height=height,
+                width=width,
+                vis_input=vis_input,
+            )
+            output_images[1] = ImageType(
+                src=pil_to_b64(output),
+                height=height,
+                width=width,
+                begin = input_img.begin,
+                end = input_img.end,
+            )
+        # for multiple iterate

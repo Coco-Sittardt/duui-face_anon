@@ -92,5 +92,40 @@ function deserialize(inputCas, inputStream)
             warning_i:addToIndexes()
         end
     end
+    -- metadata
+     --if results['model_source'] ~= nil and results['model_version'] ~= nil and results['model_name'] ~= nil and results['model_lang'] ~= nil then
+     --   --print("GetInfo")
+     --   local source = results["model_source"]
+     --   local model_version = results["model_version"]
+     --   local model_name = results["model_name"]
+     --   local model_lang = results["model_lang"]
+     --
+     --   --print("setMetaData")
+     --   local model_meta = luajava.newInstance("org.texttechnologylab.annotation.model.MetaData", inputCas)
+     --   model_meta:setModelVersion(model_version)
+     --   --         print(model_version)
+     --   model_meta:setModelName(model_name)
+     --   --         print(model_name)
+     --   model_meta:setSource(source)
+     --   --         print(source)
+     --   model_meta:setLang(model_lang)
+     --   --         print(model_lang)
+     --   model_meta:addToIndexes()
+
+    --end
+    -- anonymiyed images
+    if results['output_images'] ~= nil then
+        local output_images = results['output_images']
+        for image_id, image_data in pairs(output_images) do
+            local image = luajava.newInstance("org.texttechnologylab.annotation.type.Image", inputCas)
+            image:setSrc(img_data["anon_src"])
+            image:setWidth(img_data['width'])
+            image:setBegin(img_data['begin'])
+            image:setEnd(img_data['end'])
+            image:addToIndexes()
+        end
+    end
+
+end
     --print("---------------------- Finished errors ----------------------")
     
