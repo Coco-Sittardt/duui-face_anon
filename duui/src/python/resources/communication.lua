@@ -12,12 +12,9 @@ function serialize(inputCas, outputStream, parameters)
     -- blur/pixelate/black only work if the selected method it redaction
     -- redaction can be black, pixelate or blur
     
-    local redact_type =  parameters["redact_type"] if parameters["redact_type"]==nil then redact_type = "blur" end
+    local redact_type =  parameters["redact_type"] if parameters["redact_type"]==nil then redact_type = "None" end
     local blur_strength = parameters["blur_strength"] if parameters["blur_strength"]==nil then blur_strength=51 end
-    -- blur_strength has to be odd for the gaussian to work
-    if blur_strength%2==0 then 
-        blur_strength=51
-    end
+
     local pixel_size = parameters["pixel_size"] if parameters["pixel_size"]==nil then pixel_size=16 end
 
 

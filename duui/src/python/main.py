@@ -1,16 +1,20 @@
-import argparse
 import base64
 from io import BytesIO
+import logging
+from typing import Optional
 
 from pydantic import BaseModel
 import face_alignment
 import torch
+import gc
+
+
+from fastapi.encoders import jsonable_encoder
 from PIL import Image
 from transformers import CLIPImageProcessor, CLIPVisionModel
 from fastapi import FastAPI, Response
 from starlette.responses import JSONResponse, PlainTextResponse
 from diffusers import AutoencoderKL, DDPMScheduler
-from diffusers.utils import load_image
 from diffusers.models.referencenet.referencenet_unet_2d_condition import (
     ReferenceNetModel,
 )
@@ -21,11 +25,16 @@ from diffusers.pipelines.referencenet.pipeline_referencenet import (
 from utils.anonymize_faces_in_image import anonymize_faces_in_image
 from utils.redact_faces import redact_faces_in_image
 
-# todo this from lua
-# creating and loading models
 
 
-# --- duui
+# --- duui communication classes
+logger: Optional[logging.Logger] = None
+typesystem: Optional[str] = None
+device: Optional[torch.device] = None
+pipe: Optional[StableDiffusionReferenceNetPipeline] = None
+generator: Optional[torch.Generator] = None
+fa: Optional[face_alignment.FaceAlignment] = None
+
 
 class ImageType(BaseModel):
     src: str
@@ -36,7 +45,7 @@ class ImageType(BaseModel):
 class DUUIRequest(BaseModel):
     anon_type: str
     anon_degree: float
-    images: dict[int, InputImage]
+    images: dict[int, ImageType]
     redact_type: str
     blur: int
     pixel: int
@@ -49,14 +58,15 @@ class DUUIRequest(BaseModel):
     height: int
     width: int
 class DUUIResponse(BaseModel):
-    output_images: dict[int, InputImage]
+    output_images: dict[int, ImageType]
+    out_errors : list[str]
 
 
 
-# ===== All the different options =====
+# ===== All the different run options =====
 def single_aligned_face(source_image,
                         inference_steps,
-                        guidance_sclae,
+                        guidance_scale,
                         anonymization_degree,
                         height,
                         width, vis_input)-> Image:
@@ -64,7 +74,7 @@ def single_aligned_face(source_image,
 
     :param source_image: image to be anonymized
     :param inference_steps: number of inference steps
-    :param guidance_sclae: the guidance scale
+    :param guidance_scale: the guidance scale
     :param anonymization_degree: degree of anonymization
     :param height: output image height
     :param width: input image height
@@ -78,7 +88,7 @@ def single_aligned_face(source_image,
         source_image=source_image,
         conditioning_image=source_image,
         num_inference_steps=inference_steps,
-        guidance_scale=guidance_sclae,
+        guidance_scale=guidance_scale,
         generator=generator,
         anonymization_degree=anonymization_degree,
         width=width,
@@ -105,10 +115,7 @@ def multiple_aligned_face(
     :param anonymization_degree:
     :return:
     """
-    # SFD (likely best results, but slower)
-    fa = face_alignment.FaceAlignment(
-        face_alignment.LandmarksType.TWO_D, face_detector="sfd"
-    )
+
 
     # generate an image that anonymizes faces
     anon_image = anonymize_faces_in_image(
@@ -123,22 +130,6 @@ def multiple_aligned_face(
     )
 
     return anon_image
-
-def combine_images(images):
-    # Get the total width and maximum height of all images
-    total_width = sum(img.width for img in images)
-    max_height = max(img.height for img in images)
-
-    # Create a new image with the combined width and maximum height
-    new_image = Image.new("RGB", (total_width, max_height))
-
-    # Paste each image onto the new image horizontally
-    x_offset = 0
-    for img in images:
-        new_image.paste(img, (x_offset, 0))
-        x_offset += img.width
-
-    return new_image
 
 def swap_faces(
         source_image,
@@ -163,6 +154,7 @@ def swap_faces(
     :return: 
     """""
     # generate an image that swaps faces
+    assert pipe is not None
     swap_image = pipe(
         source_image=source_image,
         conditioning_image=conditioning_image,
@@ -208,6 +200,35 @@ def redact_faces(
         return combine_images([redact_image, source_image])
     return redact_image
 
+
+
+
+# ===== Helper
+
+def combine_images(images):
+    """
+    Combines images for comparison of input-output.
+
+    :param images:
+    :return: One larger image with both original images placed next to another.
+    """
+    # Get the total width and maximum height of all images
+
+    total_width = sum(img_data.width for img_id, img_data in images)
+    max_height = max(img_data.height for img_id, img_data in images)
+
+    # Create a new image with the combined width and maximum height
+    new_image = Image.new("RGB", (total_width, max_height))
+
+    # Paste each image onto the new image horizontally
+    x_offset = 0
+    for img in images:
+        new_image.paste(img, (x_offset, 0))
+        x_offset += img.width
+
+    return new_image
+
+
 def pil_to_b64(image):
     buffer = BytesIO()
     image.save(buffer, format="PNG")
@@ -217,36 +238,34 @@ def b64_to_pil(b64_str):
     img_bytes = base64.b64decode(b64_str)
     return Image.open(BytesIO(img_bytes)).convert("RGB")
 
-# === the container
-app = FastAPI(
-    openapi_url="/openapi.json",
-    docs_url="/api",
-    redoc_url=None,
-    terms_of_service="https://www.texttechnologylab.org/legal_notice/",
-    title="duui-face_anon",
-    description="Implementation of [WACV 2025] 'Face Anonymization Made Simple' for DUUI.",
-    version="0.1",
-        contact={
-            "name": "Coco Sittardt",
-            "url": "https://texttechnologylab.org",
-            "email": "sittardt@em.uni-frankfurt.de",
-        },
-        license_info={
-            "name": "AGPL",
-            "url": "http://www.gnu.org/licenses/agpl-3.0.en.html",
-        },
-)
+def load_typesystem()-> str:
+    #Load the predefined typesystem that is needed for this annotator to work
+    typesystem_filename = 'resources/typesystem_face_anon.xml'
+    with open(typesystem_filename, 'r') as f:
+        type_system = f.read()
+
+        logging.basicConfig(level=logging.INFO)
+        logger.info("Loaded type system from %s", typesystem_filename)
+        return type_system
 
 
 
-@app.on_event("startup")
-def startup():
-    global pipe, generator
-    # todo adjust so this takes other pretrained from duui
+def init():
+    global logger, typesystem
+
+    logging.basicConfig(level=logging.INFO)
+    logger = logging.getLogger(__name__)
+
+    typesystem = load_typesystem()
+
+
+def load_pipeline(clip_model, diffusion_model, seed):
+    global pipe, generator, fa
+    # SFD (likely best results, but slower)
+    fa = face_alignment.FaceAlignment(
+        face_alignment.LandmarksType.TWO_D, face_detector="sfd"
+    )
     face_model_id = "hkung/face-anon-simple"
-    clip_model_id = "openai/clip-vit-large-patch14"
-    sd_model_id = "stabilityai/stable-diffusion-2-1"
-
     unet = UNet2DConditionModel.from_pretrained(
         face_model_id, subfolder="unet", use_safetensors=True
     )
@@ -256,14 +275,15 @@ def startup():
     conditioning_referencenet = ReferenceNetModel.from_pretrained(
         face_model_id, subfolder="conditioning_referencenet", use_safetensors=True
     )
-    vae = AutoencoderKL.from_pretrained(sd_model_id, subfolder="vae", use_safetensors=True)
+    vae = AutoencoderKL.from_pretrained(diffusion_model, subfolder="vae", use_safetensors=True)
     scheduler = DDPMScheduler.from_pretrained(
-        sd_model_id, subfolder="scheduler", use_safetensors=True
+        diffusion_model, subfolder="scheduler", use_safetensors=True
     )
+
     feature_extractor = CLIPImageProcessor.from_pretrained(
-        clip_model_id, use_safetensors=True
+        clip_model, use_safetensors=True
     )
-    image_encoder = CLIPVisionModel.from_pretrained(clip_model_id, use_safetensors=True)
+    image_encoder = CLIPVisionModel.from_pretrained(clip_model, use_safetensors=True)
 
     pipe = StableDiffusionReferenceNetPipeline(
         unet=unet,
@@ -275,13 +295,29 @@ def startup():
         scheduler=scheduler,
     )
     pipe = pipe.to("cuda")
-
-    # todo manual seed from input
-    generator = torch.manual_seed(1)
-    print(f"CUDA available: {torch.cuda.is_available()}")
-    print(f"Device: {torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'CPU'}")
+    generator = torch.manual_seed(seed)
 
 
+# === the container
+init()
+app = FastAPI(
+    openapi_url="/openapi.json",
+    docs_url="/api",
+    redoc_url=None,
+    terms_of_service="https://www.texttechnologylab.org/legal_notice/",
+    title="duui-face_anon",
+    description="Implementation of [WACV 2025] 'Face Anonymization Made Simple' for DUUI.",
+    version="0.1",
+        contact={
+            "name": "Coco Sittardt, TTLab Team",
+            "url": "https://texttechnologylab.org",
+            "email": "sittardt@em.uni-frankfurt.de",
+        },
+        license_info={
+            "name": "AGPL",
+            "url": "http://www.gnu.org/licenses/agpl-3.0.en.html",
+        },
+)
 
 @app.get("/v1/details/input_output")
 def get_input_output()-> JSONResponse:
@@ -293,10 +329,6 @@ def get_input_output()-> JSONResponse:
     return JSONResponse(content=json_compatible_item_data)
 
 
-#Load the predefined typesystem that is needed for this annotator to work
-typesystem_filename = 'resources/typesystem_face_anon.xml'
-with open(typesystem_filename, 'rb') as f:
-    typesystem = f.read()
 # Get typesystem of this annotator
 @app.get("/v1/typesystem")
 def get_typesystem() -> Response:
@@ -342,27 +374,113 @@ def post_process(request:DUUIRequest)-> DUUIResponse:
     width = request.width
 
     output_images = {}
+    errors_out =[]
+    try:
+        load_pipeline(clip_model, diffusion_model, seed)
 
-    # selection between the different anon types:
-    # options: single_align, multiple_align, combine, swap, redact
-    match anon_type:
-        # only one image
-        case "single_align":
-            input_img = images[1]
-            output = single_aligned_face(
-                source_image=b64_to_pil(input_img.src),
-                inference_steps=inference_steps,
-                guidance_sclae=guidance,
-                anonymization_degree=anon_degree,
-                height=height,
-                width=width,
-                vis_input=vis_input,
-            )
-            output_images[1] = ImageType(
-                src=pil_to_b64(output),
-                height=height,
-                width=width,
-                begin = input_img.begin,
-                end = input_img.end,
-            )
-        # for multiple iterate
+        # TODO use the passed seed, and models
+        # selection between the different anon types:
+        # options: single_align, multiple_align, swap, redact
+        for img_id, img_data in images.items():
+            match anon_type:
+                # only one image
+                case "single_align":
+
+                    output = single_aligned_face(source_image=b64_to_pil(img_data.src), inference_steps=inference_steps,
+                                                 guidance_scale=guidance, anonymization_degree=anon_degree, height=height,
+                                                 width=width, vis_input=vis_input)
+                    output_images[img_id] = ImageType(
+                        src=pil_to_b64(output),
+                        height=height,
+                        width=width,
+                        begin = img_data.begin,
+                        end = img_data.end,
+                    )
+
+                case "multiple_align":
+                    if height != width:
+                        # todo what does the size ebven influencve here
+                        errors_out.append("width != height")
+
+                    output = multiple_aligned_face(
+                        source_image=b64_to_pil(img_data.src),
+                        image_size=height,
+                        inference_steps=inference_steps,
+                        guidance_scale=guidance,
+                        anonymization_degree=anon_degree,
+                    )
+
+                    output_images[img_id] = ImageType(
+                        src=pil_to_b64(output),
+                        height=height,
+                        width=width,
+                        begin=img_data.begin,
+                        end=img_data.end,
+                    )
+
+
+                case "swap":
+
+                    if len(images) != 2:
+                        errors_out.append("To swap two faces an input of exactly two images is required.")
+                        raise ValueError(
+                            f"You have passed a total number of {len(images)} images. To swap you need to pass exactly 2.")
+                    output = swap_faces(
+                        source_image=b64_to_pil(b64_to_pil(images[1].src)),
+                        conditioning_image=b64_to_pil(b64_to_pil(images[2].src)),
+                        inference_steps=inference_steps,
+                        guidance_scale=guidance,
+                        anonymization_degree=anon_degree,
+                        width=width,
+                        height=height,
+                        vis_input=vis_input
+                    )
+                    # uses id 1, ignores id 2 just to be able to insert it better into the CAS
+                    output_images[1] = ImageType(
+                        src=pil_to_b64(output),
+                        height=height,
+                        width=width,
+                        begin=img_data.begin,
+                        end=img_data.end
+                    )
+                    # can only run once so the iter across all images stops
+                    break
+                case "redact":
+                    if redact_type == "None":
+                        errors_out.append("Redaction Type has not been set - using default (blur)")
+                        redact_type="blur"
+                    if redact_type == "blur" and blur%2==0:
+                        errors_out.append(f"The passed blur parameter ({blur}) was even. Setting to default 51.")
+                        blur = 51
+
+                    output = redact_faces(
+                        source_image=b64_to_pil(img_data.src),
+                        image_size=height,
+                        redaction_method=redact_type,
+                        blur_strength=blur,
+                        pixel_size=pixel,
+                        vis_input=vis_input
+                    )
+                    output_images[img_id] = ImageType(
+                        src=pil_to_b64(output),
+                        height=height,
+                        width=width,
+                        begin=img_data.begin,
+                        end=img_data.end,
+                    )
+
+        return DUUIResponse(
+            output_images=output_images,
+            out_errors = errors_out
+        )
+    except Exception as ex:
+        global logger
+        logger.exception(ex)
+        return DUUIResponse(
+            output_images={},
+            out_errors=[str(ex)],
+        )
+    finally:
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            gc.collect()

@@ -110,7 +110,7 @@ def redact_faces_in_image(
     # Extract faces from the image
     # print(f"Extracting faces from {input_image_path}...")
     face_images, image_to_face_matrices = extract_faces(
-        fa, image, face_image_size, face_type
+        fa, source_image, face_image_size, face_type
     )
 
     print(f"Found {len(face_images)} face(s)")
@@ -122,7 +122,7 @@ def redact_faces_in_image(
 
         if redaction_method == "blur":
             redacted_face = blur_image(face_image, blur_strength)
-        elif redaction_method == "pixelate":
+        elif redaction_method == "pixel":
             redacted_face = pixelate_image(face_image, pixel_size)
         elif redaction_method == "black":
             redacted_face = black_out_image(face_image)
@@ -132,7 +132,7 @@ def redact_faces_in_image(
         redacted_face_images.append(redacted_face)
 
     # Merge redacted faces back into the original image
-    result_image = image
+    result_image = source_image
     for i, (redacted_face, image_to_face_mat) in enumerate(
         zip(redacted_face_images, image_to_face_matrices)
     ):
