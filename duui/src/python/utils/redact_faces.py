@@ -4,8 +4,8 @@ import face_alignment
 import numpy as np
 from PIL import Image
 
-from extractor import extract_faces, FaceType
-from merger import paste_foreground_onto_background
+from .extractor import extract_faces, FaceType
+from .merger import paste_foreground_onto_background
 
 
 def blur_image(image, blur_strength=51):

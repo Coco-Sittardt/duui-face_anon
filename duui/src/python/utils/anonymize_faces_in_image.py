@@ -5,8 +5,8 @@ import torch
 from diffusers.pipelines.referencenet.pipeline_referencenet import (
     StableDiffusionReferenceNetPipeline,
 )
-from utils.extractor import extract_faces
-from utils.merger import paste_foreground_onto_background
+from .extractor import extract_faces
+from .merger import paste_foreground_onto_background
 
 
 def anonymize_faces_in_image(

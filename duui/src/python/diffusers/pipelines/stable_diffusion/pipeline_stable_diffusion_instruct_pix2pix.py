@@ -244,7 +244,7 @@ class StableDiffusionInstructPix2PixPipeline(
         >>> import torch
         >>> from io import BytesIO
 
-        >>> from diffusers import StableDiffusionInstructPix2PixPipeline
+        >>> from diffusers_impl import StableDiffusionInstructPix2PixPipeline
 
 
         >>> def download_image(url):

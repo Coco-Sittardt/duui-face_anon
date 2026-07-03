@@ -1,7 +1,9 @@
+from __future__ import annotations
+
 import base64
 from io import BytesIO
 import logging
-from typing import Optional
+from typing import Optional, Dict, List
 
 from pydantic import BaseModel
 import face_alignment
@@ -13,6 +15,7 @@ from fastapi.encoders import jsonable_encoder
 from PIL import Image
 from transformers import CLIPImageProcessor, CLIPVisionModel
 from fastapi import FastAPI, Response
+from fastapi.exceptions import RequestValidationError
 from starlette.responses import JSONResponse, PlainTextResponse
 from diffusers import AutoencoderKL, DDPMScheduler
 from diffusers.models.referencenet.referencenet_unet_2d_condition import (
@@ -42,10 +45,11 @@ class ImageType(BaseModel):
     width: int
     begin: int
     end: int
+
 class DUUIRequest(BaseModel):
     anon_type: str
     anon_degree: float
-    images: dict[int, ImageType]
+    images: Dict[int, ImageType]
     redact_type: str
     blur: int
     pixel: int
@@ -57,9 +61,10 @@ class DUUIRequest(BaseModel):
     vis_input: bool
     height: int
     width: int
+
 class DUUIResponse(BaseModel):
-    output_images: dict[int, ImageType]
-    out_errors : list[str]
+    output_images: Dict[int, ImageType]
+    out_errors : List[str]
 
 
 
@@ -318,7 +323,13 @@ app = FastAPI(
             "url": "http://www.gnu.org/licenses/agpl-3.0.en.html",
         },
 )
-
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request, exc):
+    logger.error(f"Validation error on {request.url}: {exc.errors()}")
+    return FastAPIJSONResponse(
+        status_code=422,
+        content={"detail": exc.errors()},
+    )
 @app.get("/v1/details/input_output")
 def get_input_output()-> JSONResponse:
     json_item = {
@@ -382,9 +393,9 @@ def post_process(request:DUUIRequest)-> DUUIResponse:
         # selection between the different anon types:
         # options: single_align, multiple_align, swap, redact
         for img_id, img_data in images.items():
-            match anon_type:
+
                 # only one image
-                case "single_align":
+                if anon_type == "single_align":
 
                     output = single_aligned_face(source_image=b64_to_pil(img_data.src), inference_steps=inference_steps,
                                                  guidance_scale=guidance, anonymization_degree=anon_degree, height=height,
@@ -397,7 +408,7 @@ def post_process(request:DUUIRequest)-> DUUIResponse:
                         end = img_data.end,
                     )
 
-                case "multiple_align":
+                elif anon_type == "multiple_align":
                     if height != width:
                         # todo what does the size ebven influencve here
                         errors_out.append("width != height")
@@ -419,15 +430,15 @@ def post_process(request:DUUIRequest)-> DUUIResponse:
                     )
 
 
-                case "swap":
+                elif anon_type == "swap":
 
                     if len(images) != 2:
                         errors_out.append("To swap two faces an input of exactly two images is required.")
                         raise ValueError(
                             f"You have passed a total number of {len(images)} images. To swap you need to pass exactly 2.")
                     output = swap_faces(
-                        source_image=b64_to_pil(b64_to_pil(images[1].src)),
-                        conditioning_image=b64_to_pil(b64_to_pil(images[2].src)),
+                        source_image=b64_to_pil(images[1].src),
+                        conditioning_image=b64_to_pil(images[2].src),
                         inference_steps=inference_steps,
                         guidance_scale=guidance,
                         anonymization_degree=anon_degree,
@@ -445,7 +456,7 @@ def post_process(request:DUUIRequest)-> DUUIResponse:
                     )
                     # can only run once so the iter across all images stops
                     break
-                case "redact":
+                elif anon_type == "redact":
                     if redact_type == "None":
                         errors_out.append("Redaction Type has not been set - using default (blur)")
                         redact_type="blur"
@@ -468,6 +479,9 @@ def post_process(request:DUUIRequest)-> DUUIResponse:
                         begin=img_data.begin,
                         end=img_data.end,
                     )
+                else:
+                    raise ValueError(f"Unknown anon_type: {anon_type}")
+
 
         return DUUIResponse(
             output_images=output_images,

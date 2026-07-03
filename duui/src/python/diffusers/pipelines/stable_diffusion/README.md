@@ -31,7 +31,7 @@ download the weights with `git lfs install; git clone https://huggingface.co/run
 If you want to download the model weights using a single Python line, you need to be logged in via `huggingface-cli login`.
 
 ```python
-from diffusers import DiffusionPipeline
+from diffusers_impl import DiffusionPipeline
 
 pipeline = DiffusionPipeline.from_pretrained("runwayml/stable-diffusion-v1-5")
 ```
@@ -46,7 +46,7 @@ git clone https://huggingface.co/runwayml/stable-diffusion-v1-5
 and simply passing the local path to `from_pretrained`:
 
 ```python
-from diffusers import StableDiffusionPipeline
+from diffusers_impl import StableDiffusionPipeline
 
 pipe = StableDiffusionPipeline.from_pretrained("./stable-diffusion-v1-5")
 ```
@@ -55,7 +55,7 @@ pipe = StableDiffusionPipeline.from_pretrained("./stable-diffusion-v1-5")
 
 ```python
 # make sure you're logged in with `huggingface-cli login`
-from diffusers import StableDiffusionPipeline
+from diffusers_impl import StableDiffusionPipeline
 
 pipe = StableDiffusionPipeline.from_pretrained("runwayml/stable-diffusion-v1-5")
 pipe = pipe.to("cuda")
@@ -70,9 +70,9 @@ image.save("astronaut_rides_horse.png")
 
 ```python
 # make sure you're logged in with `huggingface-cli login`
-from diffusers import StableDiffusionPipeline, DDIMScheduler
+from diffusers_impl import StableDiffusionPipeline, DDIMScheduler
 
-scheduler =  DDIMScheduler.from_pretrained("CompVis/stable-diffusion-v1-4", subfolder="scheduler")
+scheduler = DDIMScheduler.from_pretrained("CompVis/stable-diffusion-v1-4", subfolder="scheduler")
 
 pipe = StableDiffusionPipeline.from_pretrained(
     "runwayml/stable-diffusion-v1-5",
@@ -89,7 +89,7 @@ image.save("astronaut_rides_horse.png")
 
 ```python
 # make sure you're logged in with `huggingface-cli login`
-from diffusers import StableDiffusionPipeline, LMSDiscreteScheduler
+from diffusers_impl import StableDiffusionPipeline, LMSDiscreteScheduler
 
 lms = LMSDiscreteScheduler.from_pretrained("CompVis/stable-diffusion-v1-4", subfolder="scheduler")
 
@@ -112,8 +112,7 @@ import torch
 from PIL import Image
 from io import BytesIO
 
-from diffusers import CycleDiffusionPipeline, DDIMScheduler
-
+from diffusers_impl import CycleDiffusionPipeline, DDIMScheduler
 
 # load the scheduler. CycleDiffusion only supports stochastic schedulers.
 

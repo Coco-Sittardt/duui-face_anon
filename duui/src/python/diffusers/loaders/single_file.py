@@ -130,7 +130,7 @@ class FromSingleFileMixin:
         Examples:
 
         ```py
-        >>> from diffusers import StableDiffusionPipeline
+        >>> from diffusers_impl import StableDiffusionPipeline
 
         >>> # Download pipeline from huggingface.co and cache.
         >>> pipeline = StableDiffusionPipeline.from_single_file(

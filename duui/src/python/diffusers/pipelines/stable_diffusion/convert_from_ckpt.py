@@ -1227,7 +1227,7 @@ def download_from_original_stable_diffusion_ckpt(
     """
 
     # import pipelines here to avoid circular import error when using from_single_file method
-    from diffusers import (
+    from diffusers_impl import (
         LDMTextToImagePipeline,
         PaintByExamplePipeline,
         StableDiffusionControlNetPipeline,

@@ -206,7 +206,7 @@ class ConfigMixin:
         Examples:
 
         ```python
-        >>> from diffusers import DDPMScheduler, DDIMScheduler, PNDMScheduler
+        >>> from diffusers_impl import DDPMScheduler, DDIMScheduler, PNDMScheduler
 
         >>> # Download scheduler from huggingface.co and cache.
         >>> scheduler = DDPMScheduler.from_pretrained("google/ddpm-cifar10-32")

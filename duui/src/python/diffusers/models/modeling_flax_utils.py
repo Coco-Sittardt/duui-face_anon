@@ -110,7 +110,7 @@ class FlaxModelMixin(PushToHubMixin):
         Examples:
 
         ```python
-        >>> from diffusers import FlaxUNet2DConditionModel
+        >>> from diffusers_impl import FlaxUNet2DConditionModel
 
         >>> # load model
         >>> model, params = FlaxUNet2DConditionModel.from_pretrained("runwayml/stable-diffusion-v1-5")
@@ -146,7 +146,7 @@ class FlaxModelMixin(PushToHubMixin):
         Examples:
 
         ```python
-        >>> from diffusers import FlaxUNet2DConditionModel
+        >>> from diffusers_impl import FlaxUNet2DConditionModel
 
         >>> # Download model and configuration from huggingface.co
         >>> model, params = FlaxUNet2DConditionModel.from_pretrained("runwayml/stable-diffusion-v1-5")
@@ -176,7 +176,7 @@ class FlaxModelMixin(PushToHubMixin):
         Examples:
 
         ```python
-        >>> from diffusers import FlaxUNet2DConditionModel
+        >>> from diffusers_impl import FlaxUNet2DConditionModel
 
         >>> # load model
         >>> model, params = FlaxUNet2DConditionModel.from_pretrained("runwayml/stable-diffusion-v1-5")
@@ -276,7 +276,7 @@ class FlaxModelMixin(PushToHubMixin):
         Examples:
 
         ```python
-        >>> from diffusers import FlaxUNet2DConditionModel
+        >>> from diffusers_impl import FlaxUNet2DConditionModel
 
         >>> # Download model and configuration from huggingface.co and cache.
         >>> model, params = FlaxUNet2DConditionModel.from_pretrained("runwayml/stable-diffusion-v1-5")

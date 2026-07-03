@@ -345,7 +345,7 @@ class StableDiffusionLatentUpscalePipeline(DiffusionPipeline, FromSingleFileMixi
 
         Examples:
         ```py
-        >>> from diffusers import StableDiffusionLatentUpscalePipeline, StableDiffusionPipeline
+        >>> from diffusers_impl import StableDiffusionLatentUpscalePipeline, StableDiffusionPipeline
         >>> import torch
 
 

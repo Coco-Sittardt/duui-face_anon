@@ -56,7 +56,7 @@ class ConsistencyDecoderVAE(ModelMixin, ConfigMixin):
     Examples:
         ```py
         >>> import torch
-        >>> from diffusers import StableDiffusionPipeline, ConsistencyDecoderVAE
+        >>> from diffusers_impl import StableDiffusionPipeline, ConsistencyDecoderVAE
 
         >>> vae = ConsistencyDecoderVAE.from_pretrained("openai/consistency-decoder", torch_dtype=torch.float16)
         >>> pipe = StableDiffusionPipeline.from_pretrained(

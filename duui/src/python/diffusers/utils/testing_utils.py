@@ -772,8 +772,8 @@ class CaptureLogger:
         The captured output is available via `self.out`
     Example:
     ```python
-    >>> from diffusers import logging
-    >>> from diffusers.testing_utils import CaptureLogger
+    >>> from diffusers_impl import logging
+    >>> from diffusers_impl.testing_utils import CaptureLogger
 
     >>> msg = "Testing 1, 2, 3"
     >>> logging.set_verbosity_info()

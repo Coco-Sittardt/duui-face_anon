@@ -285,7 +285,7 @@ class ModelMixin(torch.nn.Module, PushToHubMixin):
 
         ```py
         >>> import torch
-        >>> from diffusers import UNet2DConditionModel
+        >>> from diffusers_impl import UNet2DConditionModel
         >>> from xformers.ops import MemoryEfficientAttentionFlashAttentionOp
 
         >>> model = UNet2DConditionModel.from_pretrained(
