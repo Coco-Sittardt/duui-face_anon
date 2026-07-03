@@ -21,6 +21,10 @@ https://github.com/hanweikung/face_anon_simple/tree/main
 ```
 
 
+Multiple people image: https://images.pexels.com/photos/10351367/pexels-photo-10351367.jpeg
+Single person: https://images.pexels.com/photos/31430969/pexels-photo-31430969.jpeg
+
+
 ```python
 # the base selection between which anonymization is run
 anon_type = request.anon_type
