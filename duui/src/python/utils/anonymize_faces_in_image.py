@@ -2,7 +2,7 @@ import face_alignment
 from PIL import Image
 import torch
 
-from diffusers.pipelines.referencenet.pipeline_referencenet import (
+from diffusers_custom.pipelines.referencenet.pipeline_referencenet import (
     StableDiffusionReferenceNetPipeline,
 )
 from .extractor import extract_faces

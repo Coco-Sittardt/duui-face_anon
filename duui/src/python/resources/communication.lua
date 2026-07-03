@@ -13,9 +13,9 @@ function serialize(inputCas, outputStream, parameters)
     -- redaction can be black, pixelate or blur
     
     local redact_type =  parameters["redact_type"] if parameters["redact_type"]==nil then redact_type = "None" end
-    local blur_strength = parameters["blur_strength"] if parameters["blur_strength"]==nil then blur_strength=51 end
+    local blur = parameters["blur"] if parameters["blur"]==nil then blur=51 end
 
-    local pixel_size = parameters["pixel_size"] if parameters["pixel_size"]==nil then pixel_size=16 end
+    local pixel = parameters["pixel"] if parameters["pixel"]==nil then pixel=16 end
 
 
     -- all the other possible settings

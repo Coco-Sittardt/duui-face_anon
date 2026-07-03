@@ -15,14 +15,15 @@ from fastapi.encoders import jsonable_encoder
 from PIL import Image
 from transformers import CLIPImageProcessor, CLIPVisionModel
 from fastapi import FastAPI, Response
+from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from starlette.responses import JSONResponse, PlainTextResponse
 from diffusers import AutoencoderKL, DDPMScheduler
-from diffusers.models.referencenet.referencenet_unet_2d_condition import (
+from diffusers_custom.models.referencenet.referencenet_unet_2d_condition import (
     ReferenceNetModel,
 )
-from diffusers.models.referencenet.unet_2d_condition import UNet2DConditionModel
-from diffusers.pipelines.referencenet.pipeline_referencenet import (
+from diffusers_custom.models.referencenet.unet_2d_condition import UNet2DConditionModel
+from diffusers_custom.pipelines.referencenet.pipeline_referencenet import (
     StableDiffusionReferenceNetPipeline,
 )
 from utils.anonymize_faces_in_image import anonymize_faces_in_image
@@ -326,7 +327,7 @@ app = FastAPI(
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request, exc):
     logger.error(f"Validation error on {request.url}: {exc.errors()}")
-    return FastAPIJSONResponse(
+    return JSONResponse(
         status_code=422,
         content={"detail": exc.errors()},
     )
