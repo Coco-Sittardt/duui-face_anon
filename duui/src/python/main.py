@@ -62,6 +62,7 @@ class DUUIRequest(BaseModel):
     vis_input: bool
     height: int
     width: int
+    hf_token: str
 
 class DUUIResponse(BaseModel):
     output_images: Dict[int, ImageType]
@@ -265,7 +266,7 @@ def init():
     typesystem = load_typesystem()
 
 
-def load_pipeline(clip_model, diffusion_model, seed):
+def load_pipeline(clip_model, diffusion_model, seed, token):
     global pipe, generator, fa
     # SFD (likely best results, but slower)
     fa = face_alignment.FaceAlignment(
@@ -273,23 +274,28 @@ def load_pipeline(clip_model, diffusion_model, seed):
     )
     face_model_id = "hkung/face-anon-simple"
     unet = UNet2DConditionModel.from_pretrained(
-        face_model_id, subfolder="unet", use_safetensors=True
+        face_model_id, subfolder="unet", use_safetensors=True, token=token
     )
     referencenet = ReferenceNetModel.from_pretrained(
-        face_model_id, subfolder="referencenet", use_safetensors=True
+        face_model_id, subfolder="referencenet", use_safetensors=True, token=token
     )
     conditioning_referencenet = ReferenceNetModel.from_pretrained(
-        face_model_id, subfolder="conditioning_referencenet", use_safetensors=True
+        face_model_id, subfolder="conditioning_referencenet", use_safetensors=True, token=token
     )
-    vae = AutoencoderKL.from_pretrained(diffusion_model, subfolder="vae", use_safetensors=True)
+    vae = AutoencoderKL.from_pretrained(
+        diffusion_model, subfolder="vae", use_safetensors=True,token=token
+    )
     scheduler = DDPMScheduler.from_pretrained(
-        diffusion_model, subfolder="scheduler", use_safetensors=True
+        diffusion_model, subfolder="scheduler", use_safetensors=True, token=token
     )
 
     feature_extractor = CLIPImageProcessor.from_pretrained(
-        clip_model, use_safetensors=True
+        clip_model, use_safetensors=True, token=token
     )
-    image_encoder = CLIPVisionModel.from_pretrained(clip_model, use_safetensors=True)
+    image_encoder = CLIPVisionModel.from_pretrained(
+        clip_model, use_safetensors=True, token=token
+    )
+
 
     pipe = StableDiffusionReferenceNetPipeline(
         unet=unet,
@@ -366,6 +372,7 @@ def post_process(request:DUUIRequest)-> DUUIResponse:
 
 
     """
+    print(request)
     # the base selection between which anonymization is run
     anon_type = request.anon_type
     # the amount of anonymization
@@ -384,11 +391,14 @@ def post_process(request:DUUIRequest)-> DUUIResponse:
     vis_input = request.vis_input
     height = request.height
     width = request.width
+    hf_token = request.hf_token
 
+    if hf_token=="None":
+        raise ValueError("Please provide a hugging face token, to access the models.")
     output_images = {}
     errors_out =[]
     try:
-        load_pipeline(clip_model, diffusion_model, seed)
+        load_pipeline(clip_model, diffusion_model, seed, hf_token)
 
         # TODO use the passed seed, and models
         # selection between the different anon types:

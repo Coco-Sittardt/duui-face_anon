@@ -6,7 +6,7 @@ Image = luajava.bindClass("org.texttechnologylab.annotation.type.Image")
 function serialize(inputCas, outputStream, parameters)
     print("start Lua serialzation")
     -- get the parameters or run default
-
+    local hf_token = parameters["hf_token"]if parameters["hf_token"]==nil then hf_token="None" end
     local anon_type = parameters["anon_type"] if parameters["anon_type"]==nil then anon_type = "single_anon" end
 
     -- blur/pixelate/black only work if the selected method it redaction
@@ -19,7 +19,7 @@ function serialize(inputCas, outputStream, parameters)
 
 
     -- all the other possible settings
-    local diffusion_model = parameters["diffusion_model"] if parameters["diffusion_model"]==nil then diffusion_model = "stabilityai/stable-diffusion-2-1"  end
+    local diffusion_model = parameters["diffusion_model"] if parameters["diffusion_model"]==nil then diffusion_model = "sd2-community/stable-diffusion-2-1"  end
     local clip_model = parameters["clip_model"] if parameters["clip_model"]==nil then clip_model = "openai/clip-vit-large-patch14" end
     local seed = parameters["seed"] if parameters["seed"]==nil then seed = 1 end
     local guidance = parameters["guidance"] if parameters["guidance"]==nil then guidance = 4.0 end
@@ -36,7 +36,7 @@ function serialize(inputCas, outputStream, parameters)
     local width = parameters["width"] if parameters["width"]==nil then width = 512 end
 
 
-    print(anon_type..redact_type..blur..pixel..diffusion_model..clip_model..seed..guidance..inference_steps..anon_degree..vis_input..height..width)
+    --print(anon_type..redact_type..blur..pixel..diffusion_model..clip_model..seed..guidance..inference_steps..anon_degree..vis_input..height..width)
      
 
 
@@ -62,8 +62,8 @@ function serialize(inputCas, outputStream, parameters)
         anon_degree = anon_degree,
         images = images,
         redact_type = redact_type,
-        blur_strength = blur_strength,
-        pixel_size = pixel_size,
+        blur = blur,
+        pixel = pixel,
         diffusion_model = diffusion_model,
         clip_model = clip_model,
         seed = seed,
@@ -71,7 +71,8 @@ function serialize(inputCas, outputStream, parameters)
         inference_steps =inference_steps,
         vis_input = vis_input,
         height =height,
-        width = width
+        width = width,
+        hf_token=hf_token
     }))
     
 end

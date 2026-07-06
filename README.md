@@ -45,3 +45,6 @@ width = request.width
 ```
 
 - ERROR: git+https://github.com/hanweikung/face_anon_simple.git does not appear to be a Python project: neither 'setup.py' nor 'pyproject.toml' found.
+
+use https://huggingface.co/sd2-community/stable-diffusion-2-1 as the Stability AI version is deprecated and was taken down but the pipeline
+requires the UNet format
