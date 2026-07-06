@@ -34,6 +34,9 @@ function serialize(inputCas, outputStream, parameters)
     local vis_input = parameters["vis_input"] if parameters["vis_input"]==nil then vis_input = "False" end
     local height = parameters["height"] if parameters["height"]==nil then height = 512 end
     local width = parameters["width"] if parameters["width"]==nil then width = 512 end
+
+
+    print(anon_type..redact_type..blur..pixel..diffusion_model..clip_model..seed..guidance..inference_steps..anon_degree..vis_input..height..width)
      
 
 
@@ -53,7 +56,7 @@ function serialize(inputCas, outputStream, parameters)
         }
         number_of_images = number_of_images + 1
     end
-
+    print(images)
     outputStream:write(json.encode({
         anon_type = anon_type,
         anon_degree = anon_degree,
