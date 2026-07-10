@@ -17,6 +17,8 @@ import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.*;
 import java.net.UnknownHostException;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.Base64;
 import java.util.List;
 
@@ -29,9 +31,11 @@ public class AnonTest {
     static String url = "http://127.0.0.1:8001";
     static String inputPath = "resources/input";
     static String sOutputPath = "resources/output";
+    static String hf_token;
 
     @BeforeAll
     static void beforeAll() throws Exception {
+        hf_token = System.getenv("HF_TOKEN");
         composer = new DUUIComposer()
                 .withSkipVerification(true)
                 .withLuaContext(new DUUILuaContext().withJsonLibrary());
@@ -82,6 +86,9 @@ public class AnonTest {
     }
     // Helper method to save Base64 string back to an image file
     private static void saveBase64ToImage(String base64String, String name) {
+        LocalDateTime currentDateTime = LocalDateTime.now();
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("HH-mm-ss");
+
         try {
             // Decode the Base64 string into a byte array
             byte[] decodedBytes = Base64.getDecoder().decode(base64String);
@@ -91,7 +98,7 @@ public class AnonTest {
             BufferedImage image = ImageIO.read(inputStream);
 
             // Save the image to the specified output file
-            File outputFile = new File(sOutputPath + "/" +name + ".png");
+            File outputFile = new File(sOutputPath + "/" +currentDateTime.format(formatter) + ".png");
             ImageIO.write(image, "png", outputFile);
 
             System.out.println("Image saved as: " + sOutputPath+name);
@@ -132,14 +139,14 @@ public class AnonTest {
 
     }
 
-    /*
-    to visualize the cas to check if it was initialized correctly
-     */
-    public static void simpleTempExporter(JCas cas, String filename) throws IOException{
-        File outputFile = new File(sOutputPath + "/"+ filename + ".xmi");
-        outputFile.getParentFile().mkdirs();
-        CasIOUtils.save(cas.getCas(), new FileOutputStream(outputFile), SerialFormat.XMI_PRETTY);
-    }
+//    /*
+//    to visualize the cas to check if it was initialized correctly
+//     */
+//    public static void simpleTempExporter(JCas cas, String filename) throws IOException{
+//        File outputFile = new File(sOutputPath + "/"+ filename + ".xmi");
+//        outputFile.getParentFile().mkdirs();
+//        CasIOUtils.save(cas.getCas(), new FileOutputStream(outputFile), SerialFormat.XMI_PRETTY);
+//    }
 
     @Test
     public void testSingleFaceSimple() throws Exception {
@@ -147,12 +154,129 @@ public class AnonTest {
                 new DUUIRemoteDriver.Component(url)
                         .withParameter("anon_type", "single_align")
                         .withParameter("vis_input", "true")
+                        .withParameter("hf_token", hf_token)
                         .build().withTimeout(1000)
 
         );
 
         createCas();
-        simpleTempExporter(cas, "testSingleFaceSimple");
         composer.run(cas);
+    }
+
+
+
+    @Test
+    public void testMultipleAlignSimple() throws Exception {
+        composer.add(
+                new DUUIRemoteDriver.Component(url)
+                        .withParameter("anon_type", "multiple_align")
+                        .withParameter("vis_input", "true")
+                        .withParameter("hf_token", hf_token)
+                        .build().withTimeout(1000)
+        );
+
+        createCas();
+        composer.run(cas);
+    }
+
+    @Test
+    public void testSwapSimple() throws Exception {
+        composer.add(
+                new DUUIRemoteDriver.Component(url)
+                        .withParameter("anon_type", "swap")
+                        .withParameter("vis_input", "true")
+                        .withParameter("hf_token", hf_token)
+                        .build().withTimeout(1000)
+        );
+
+        createCas(); // needs exactly 2 images loaded in the CAS
+        composer.run(cas);
+    }
+
+    @Test
+    public void testRedactBlur() throws Exception {
+        composer.add(
+                new DUUIRemoteDriver.Component(url)
+                        .withParameter("anon_type", "redact")
+                        .withParameter("redact_type", "blur")
+                        .withParameter("blur", "51")
+                        .withParameter("hf_token", hf_token)
+                        .build().withTimeout(1000)
+        );
+
+        createCas();
+        composer.run(cas);
+    }
+
+    @Test
+    public void testRedactPixel() throws Exception {
+        composer.add(
+                new DUUIRemoteDriver.Component(url)
+                        .withParameter("anon_type", "redact")
+                        .withParameter("redact_type", "pixel")
+                        .withParameter("pixel", "10")
+                        .withParameter("hf_token", hf_token)
+                        .build().withTimeout(1000)
+        );
+
+        createCas();
+        composer.run(cas);
+    }
+    @Test
+    public void testBlackOut()throws Exception{
+        composer.add(
+                new DUUIRemoteDriver.Component(url)
+                        .withParameter("anon_type", "redact")
+                        .withParameter("redact_type", "black")
+                        .withParameter("pixel", "10")
+                        .withParameter("hf_token", hf_token)
+                        .build().withTimeout(1000)
+        );
+
+        createCas();
+        composer.run(cas);
+    }
+    @Test
+    public void testMissingHfTokenFails() throws Exception {
+        composer.add(
+                new DUUIRemoteDriver.Component(url)
+                        .withParameter("anon_type", "single_align")
+                        .build().withTimeout(1000)
+        );
+
+        createCas();
+        composer.run(cas);
+        // todo does it contain the errors? and how do i see them
+    }
+
+
+    @Test
+    public void testNoImages()throws Exception {
+        composer.add(
+                new DUUIRemoteDriver.Component(url)
+                        .withParameter("anon_type", "single_align")
+                        .withParameter("hf_token", hf_token)
+                        .build().withTimeout(1000)
+        );
+
+        cas = JCasFactory.createJCas();
+        cas.setDocumentText("placeholder");
+
+        composer.run(cas);
+    }
+
+
+    @Test
+    public void testSwap() throws Exception{
+        composer.add(
+                new DUUIRemoteDriver.Component(url)
+                        .withParameter("anon_type", "swap")
+                        .withParameter("hf_token", hf_token)
+                        .build().withTimeout(1000)
+        );
+
+        createCas();
+        composer.run(cas);
+
     }
 }

@@ -60,8 +60,8 @@ class DUUIRequest(BaseModel):
     guidance: float
     inference_steps: int
     vis_input: bool
-    height: int
-    width: int
+    height: Optional[int] = None
+    width: Optional[int] = None
     hf_token: str
 
 class DUUIResponse(BaseModel):
@@ -221,8 +221,8 @@ def combine_images(images):
     """
     # Get the total width and maximum height of all images
 
-    total_width = sum(img_data.width for img_id, img_data in images)
-    max_height = max(img_data.height for img_id, img_data in images)
+    total_width = sum(img.width for img in images)
+    max_height = max(img.height for img in images)
 
     # Create a new image with the combined width and maximum height
     new_image = Image.new("RGB", (total_width, max_height))
@@ -260,7 +260,7 @@ def load_typesystem()-> str:
 def init():
     global logger, typesystem
 
-    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(level=logging.DEBUG)
     logger = logging.getLogger(__name__)
 
     typesystem = load_typesystem()
@@ -389,109 +389,124 @@ def post_process(request:DUUIRequest)-> DUUIResponse:
     guidance = request.guidance
     inference_steps = request.inference_steps
     vis_input = request.vis_input
+
+    # these can be "None" and will then be set later in the loop, UNLESS predefined height / width is passed
     height = request.height
     width = request.width
+
+
     hf_token = request.hf_token
 
-    if hf_token=="None":
-        raise ValueError("Please provide a hugging face token, to access the models.")
+
     output_images = {}
     errors_out =[]
     try:
+        if len(images) == 0:
+            raise ValueError("No Images provided")
+        if hf_token == "None":
+            raise ValueError("Please provide a hugging face token, to access the models.")
+
         load_pipeline(clip_model, diffusion_model, seed, hf_token)
 
-        # TODO use the passed seed, and models
+
         # selection between the different anon types:
         # options: single_align, multiple_align, swap, redact
         for img_id, img_data in images.items():
 
-                # only one image
-                if anon_type == "single_align":
+            source_image = b64_to_pil(img_data.src)
+            if height is None:
+                height = source_image.height
+            if width is None:
+                width = source_image.width
 
-                    output = single_aligned_face(source_image=b64_to_pil(img_data.src), inference_steps=inference_steps,
-                                                 guidance_scale=guidance, anonymization_degree=anon_degree, height=height,
-                                                 width=width, vis_input=vis_input)
-                    output_images[img_id] = ImageType(
-                        src=pil_to_b64(output),
-                        height=height,
-                        width=width,
-                        begin = img_data.begin,
-                        end = img_data.end,
-                    )
-
-                elif anon_type == "multiple_align":
-                    if height != width:
-                        # todo what does the size ebven influencve here
-                        errors_out.append("width != height")
-
-                    output = multiple_aligned_face(
-                        source_image=b64_to_pil(img_data.src),
-                        image_size=height,
-                        inference_steps=inference_steps,
-                        guidance_scale=guidance,
-                        anonymization_degree=anon_degree,
-                    )
-
-                    output_images[img_id] = ImageType(
-                        src=pil_to_b64(output),
-                        height=height,
-                        width=width,
-                        begin=img_data.begin,
-                        end=img_data.end,
-                    )
+            # only one image
+            if anon_type == "single_align":
 
 
-                elif anon_type == "swap":
+                output = single_aligned_face(source_image, inference_steps=inference_steps,
+                                             guidance_scale=guidance, anonymization_degree=anon_degree, height=height,
+                                             width=width, vis_input=vis_input)
+                output_images[img_id] = ImageType(
+                    src=pil_to_b64(output),
+                    height=height,
+                    width=width,
+                    begin = img_data.begin,
+                    end = img_data.end,
+                )
 
-                    if len(images) != 2:
-                        errors_out.append("To swap two faces an input of exactly two images is required.")
-                        raise ValueError(
-                            f"You have passed a total number of {len(images)} images. To swap you need to pass exactly 2.")
-                    output = swap_faces(
-                        source_image=b64_to_pil(images[1].src),
-                        conditioning_image=b64_to_pil(images[2].src),
-                        inference_steps=inference_steps,
-                        guidance_scale=guidance,
-                        anonymization_degree=anon_degree,
-                        width=width,
-                        height=height,
-                        vis_input=vis_input
-                    )
-                    # uses id 1, ignores id 2 just to be able to insert it better into the CAS
-                    output_images[1] = ImageType(
-                        src=pil_to_b64(output),
-                        height=height,
-                        width=width,
-                        begin=img_data.begin,
-                        end=img_data.end
-                    )
-                    # can only run once so the iter across all images stops
-                    break
-                elif anon_type == "redact":
-                    if redact_type == "None":
-                        errors_out.append("Redaction Type has not been set - using default (blur)")
-                        redact_type="blur"
-                    if redact_type == "blur" and blur%2==0:
-                        errors_out.append(f"The passed blur parameter ({blur}) was even. Setting to default 51.")
-                        blur = 51
+            elif anon_type == "multiple_align":
+                if height != width:
 
-                    output = redact_faces(
-                        source_image=b64_to_pil(img_data.src),
-                        image_size=height,
-                        redaction_method=redact_type,
-                        blur_strength=blur,
-                        pixel_size=pixel,
-                        vis_input=vis_input
-                    )
-                    output_images[img_id] = ImageType(
-                        src=pil_to_b64(output),
-                        height=height,
-                        width=width,
-                        begin=img_data.begin,
-                        end=img_data.end,
-                    )
-                else:
-                    raise ValueError(f"Unknown anon_type: {anon_type}")
+                    errors_out.append("width != height")
+
+                output = multiple_aligned_face(
+                    source_image=source_image,
+                    image_size=height,
+                    inference_steps=inference_steps,
+                    guidance_scale=guidance,
+                    anonymization_degree=anon_degree,
+                )
+
+                output_images[img_id] = ImageType(
+                    src=pil_to_b64(output),
+                    height=height,
+                    width=width,
+                    begin=img_data.begin,
+                    end=img_data.end,
+                )
+
+
+            elif anon_type == "swap":
+
+                if len(images) != 2:
+                    errors_out.append("To swap two faces an input of exactly two images is required.")
+                    raise ValueError(
+                        f"You have passed a total number of {len(images)} images. To swap you need to pass exactly 2.")
+                output = swap_faces(
+                    source_image=b64_to_pil(images[1].src),
+                    conditioning_image=b64_to_pil(images[2].src),
+                    inference_steps=inference_steps,
+                    guidance_scale=guidance,
+                    anonymization_degree=anon_degree,
+                    width=width,
+                    height=height,
+                    vis_input=vis_input
+                )
+                # uses id 1, ignores id 2 just to be able to insert it better into the CAS
+                output_images[1] = ImageType(
+                    src=pil_to_b64(output),
+                    height=height,
+                    width=width,
+                    begin=img_data.begin,
+                    end=img_data.end
+                )
+                # can only run once so the iter across all images stops
+                break
+            elif anon_type == "redact":
+                if redact_type == "None":
+                    errors_out.append("Redaction Type has not been set - using default (blur)")
+                    redact_type="blur"
+                if redact_type == "blur" and blur%2==0:
+                    errors_out.append(f"The passed blur parameter ({blur}) was even. Setting to default 51.")
+                    blur = 51
+
+                output = redact_faces(
+                    source_image=source_image,
+                    image_size=height,
+                    redaction_method=redact_type,
+                    blur_strength=blur,
+                    pixel_size=pixel,
+                    vis_input=vis_input
+                )
+                output_images[img_id] = ImageType(
+                    src=pil_to_b64(output),
+                    height=height,
+                    width=width,
+                    begin=img_data.begin,
+                    end=img_data.end,
+                )
+            else:
+                raise ValueError(f"Unknown anon_type: {anon_type}")
 
 
         return DUUIResponse(

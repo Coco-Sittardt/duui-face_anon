@@ -32,8 +32,8 @@ function serialize(inputCas, outputStream, parameters)
 
     end
     local vis_input = parameters["vis_input"] if parameters["vis_input"]==nil then vis_input = "False" end
-    local height = parameters["height"] if parameters["height"]==nil then height = 512 end
-    local width = parameters["width"] if parameters["width"]==nil then width = 512 end
+    local height = parameters["height"] if parameters["height"]==nil then height = tonumber(height) end
+    local width = parameters["width"] if parameters["width"]==nil then width = tonumber(height) end
 
 
     --print(anon_type..redact_type..blur..pixel..diffusion_model..clip_model..seed..guidance..inference_steps..anon_degree..vis_input..height..width)
@@ -84,8 +84,8 @@ function deserialize(inputCas, inputStream)
     --print("results")
     --print(results)
 
-    if results['errors'] ~= nil then
-        local errors = results['errors']
+    if results['out_errors'] ~= nil then
+        local errors = results['out_errors']
         for index_i, error in ipairs(errors) do
             local warning_i = luajava.newInstance("org.texttechnologylab.annotation.AnnotationComment", inputCas)
             warning_i:setKey("error")
@@ -117,10 +117,11 @@ function deserialize(inputCas, inputStream)
     -- anonymiyed images
     if results['output_images'] ~= nil then
         local output_images = results['output_images']
-        for image_id, image_data in pairs(output_images) do
+        for image_id, img_data in pairs(output_images) do
             local image = luajava.newInstance("org.texttechnologylab.annotation.type.Image", inputCas)
-            image:setSrc(img_data["anon_src"])
+            image:setSrc(img_data["src"])
             image:setWidth(img_data['width'])
+            image:setHeight(img_data['height'])
             image:setBegin(img_data['begin'])
             image:setEnd(img_data['end'])
             image:addToIndexes()
