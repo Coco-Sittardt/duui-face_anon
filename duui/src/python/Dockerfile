@@ -4,8 +4,8 @@ WORKDIR /usr/src/app
 
 RUN pip install --upgrade pip
 
-COPY src/python/requirements.txt src/python/requirements.txt
-RUN pip install -r ./src/python/requirements.txt
+COPY requirements.txt requirements.txt
+RUN pip install -r requirements.txt
 
 
 

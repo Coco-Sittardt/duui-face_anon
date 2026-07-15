@@ -40,6 +40,7 @@ generator: Optional[torch.Generator] = None
 fa: Optional[face_alignment.FaceAlignment] = None
 
 
+
 class ImageType(BaseModel):
     src: str
     height: int
@@ -76,7 +77,7 @@ def single_aligned_face(source_image,
                         guidance_scale,
                         anonymization_degree,
                         height,
-                        width, vis_input)-> Image:
+                        width, vis_input, generator)-> Image:
     """
 
     :param source_image: image to be anonymized
@@ -91,18 +92,20 @@ def single_aligned_face(source_image,
     :return: anonymized image
     """
     # generate an image that anonymizes faces
-    anon_image = pipe(
-        source_image=source_image,
-        conditioning_image=source_image,
-        num_inference_steps=inference_steps,
-        guidance_scale=guidance_scale,
-        generator=generator,
-        anonymization_degree=anonymization_degree,
-        width=width,
-        height=height,
-    ).images[0]
-    if vis_input:
-        return combine_images([anon_image, source_image])
+
+    with torch.no_grad():
+        anon_image = pipe(
+            source_image=source_image,
+            conditioning_image=source_image,
+            num_inference_steps=inference_steps,
+            guidance_scale=guidance_scale,
+            generator=generator,
+            anonymization_degree=anonymization_degree,
+            width=width,
+            height=height,
+        ).images[0]
+        if vis_input:
+            return combine_images([anon_image, source_image])
 
     return anon_image
 
@@ -112,6 +115,7 @@ def multiple_aligned_face(
         inference_steps,
         guidance_scale,
         anonymization_degree,
+        generator
 )->Image:
     """
 
@@ -147,6 +151,7 @@ def swap_faces(
         width,
         height,
         vis_input,
+        generator
     ):
     """
     
@@ -162,18 +167,19 @@ def swap_faces(
     """""
     # generate an image that swaps faces
     assert pipe is not None
-    swap_image = pipe(
-        source_image=source_image,
-        conditioning_image=conditioning_image,
-        num_inference_steps=inference_steps,
-        guidance_scale=guidance_scale,
-        generator=generator,
-        anonymization_degree=anonymization_degree,
-        width=width,
-        height=height,
-    ).images[0]
-    if vis_input:
-        return combine_images([swap_image, source_image])
+    with torch.no_grad():
+        swap_image = pipe(
+            source_image=source_image,
+            conditioning_image=conditioning_image,
+            num_inference_steps=inference_steps,
+            guidance_scale=guidance_scale,
+            generator=generator,
+            anonymization_degree=anonymization_degree,
+            width=width,
+            height=height,
+        ).images[0]
+        if vis_input:
+            return combine_images([swap_image, source_image])
     return swap_image
 
 
@@ -268,32 +274,35 @@ def init():
 
 def load_pipeline(clip_model, diffusion_model, seed, token):
     global pipe, generator, fa
+    if pipe is not None:
+        del pipe
+        torch.cuda.empty_cache()
+        gc.collect()
     # SFD (likely best results, but slower)
     fa = face_alignment.FaceAlignment(
         face_alignment.LandmarksType.TWO_D, face_detector="sfd"
     )
     face_model_id = "hkung/face-anon-simple"
     unet = UNet2DConditionModel.from_pretrained(
-        face_model_id, subfolder="unet", use_safetensors=True, token=token
+        face_model_id, subfolder="unet", use_safetensors=True, token=token, torch_dtype=torch.float16
     )
     referencenet = ReferenceNetModel.from_pretrained(
-        face_model_id, subfolder="referencenet", use_safetensors=True, token=token
+        face_model_id, subfolder="referencenet", use_safetensors=True, token=token, torch_dtype=torch.float16
     )
     conditioning_referencenet = ReferenceNetModel.from_pretrained(
-        face_model_id, subfolder="conditioning_referencenet", use_safetensors=True, token=token
+        face_model_id, subfolder="conditioning_referencenet", use_safetensors=True, token=token, torch_dtype=torch.float16
     )
     vae = AutoencoderKL.from_pretrained(
-        diffusion_model, subfolder="vae", use_safetensors=True,token=token
+        diffusion_model, subfolder="vae", use_safetensors=True,token=token, torch_dtype=torch.float16
     )
     scheduler = DDPMScheduler.from_pretrained(
-        diffusion_model, subfolder="scheduler", use_safetensors=True, token=token
-    )
+        diffusion_model, subfolder="scheduler", use_safetensors=True, token=token)
 
     feature_extractor = CLIPImageProcessor.from_pretrained(
-        clip_model, use_safetensors=True, token=token
+        clip_model, use_safetensors=True, token=token, torch_dtype=torch.float16
     )
     image_encoder = CLIPVisionModel.from_pretrained(
-        clip_model, use_safetensors=True, token=token
+        clip_model, use_safetensors=True, token=token, torch_dtype=torch.float16
     )
 
 
@@ -307,11 +316,12 @@ def load_pipeline(clip_model, diffusion_model, seed, token):
         scheduler=scheduler,
     )
     pipe = pipe.to("cuda")
-    generator = torch.manual_seed(seed)
+    generator = torch.Generator(device="cuda").manual_seed(seed)
 
 
 # === the container
 init()
+
 app = FastAPI(
     openapi_url="/openapi.json",
     docs_url="/api",
@@ -390,9 +400,7 @@ def post_process(request:DUUIRequest)-> DUUIResponse:
     inference_steps = request.inference_steps
     vis_input = request.vis_input
 
-    # these can be "None" and will then be set later in the loop, UNLESS predefined height / width is passed
-    height = request.height
-    width = request.width
+  
 
 
     hf_token = request.hf_token
@@ -407,11 +415,12 @@ def post_process(request:DUUIRequest)-> DUUIResponse:
             raise ValueError("Please provide a hugging face token, to access the models.")
 
         load_pipeline(clip_model, diffusion_model, seed, hf_token)
-
-
         # selection between the different anon types:
         # options: single_align, multiple_align, swap, redact
         for img_id, img_data in images.items():
+              # these can be "None" and will then be set later in the loop, UNLESS predefined height / width is passed
+            height = request.height
+            width = request.width
 
             source_image = b64_to_pil(img_data.src)
             if height is None:
@@ -419,13 +428,21 @@ def post_process(request:DUUIRequest)-> DUUIResponse:
             if width is None:
                 width = source_image.width
 
+            MAX_DIM = 768
+            if height > MAX_DIM or width > MAX_DIM:
+                scale = MAX_DIM / max(height, width)
+                height = (int(height * scale)//8)*8
+                width = (int(width * scale)//8)*8
+                source_image = source_image.resize((width, height), Image.LANCZOS)
+
             # only one image
             if anon_type == "single_align":
+                generator = torch.Generator(device="cuda").manual_seed(seed)
 
 
                 output = single_aligned_face(source_image, inference_steps=inference_steps,
                                              guidance_scale=guidance, anonymization_degree=anon_degree, height=height,
-                                             width=width, vis_input=vis_input)
+                                             width=width, vis_input=vis_input, generator=generator)
                 output_images[img_id] = ImageType(
                     src=pil_to_b64(output),
                     height=height,
@@ -435,6 +452,7 @@ def post_process(request:DUUIRequest)-> DUUIResponse:
                 )
 
             elif anon_type == "multiple_align":
+                generator = torch.Generator(device="cuda").manual_seed(seed)
                 if height != width:
 
                     errors_out.append("width != height")
@@ -445,6 +463,7 @@ def post_process(request:DUUIRequest)-> DUUIResponse:
                     inference_steps=inference_steps,
                     guidance_scale=guidance,
                     anonymization_degree=anon_degree,
+                    generator=generator
                 )
 
                 output_images[img_id] = ImageType(
@@ -457,20 +476,23 @@ def post_process(request:DUUIRequest)-> DUUIResponse:
 
 
             elif anon_type == "swap":
+                generator = torch.Generator(device="cuda").manual_seed(seed)
 
                 if len(images) != 2:
                     errors_out.append("To swap two faces an input of exactly two images is required.")
                     raise ValueError(
                         f"You have passed a total number of {len(images)} images. To swap you need to pass exactly 2.")
+                ids = list(images.values()) # work around
                 output = swap_faces(
-                    source_image=b64_to_pil(images[1].src),
-                    conditioning_image=b64_to_pil(images[2].src),
+                    source_image=b64_to_pil(ids[0].src),
+                    conditioning_image=b64_to_pil(ids[1].src),
                     inference_steps=inference_steps,
                     guidance_scale=guidance,
                     anonymization_degree=anon_degree,
                     width=width,
                     height=height,
-                    vis_input=vis_input
+                    vis_input=vis_input,
+                    generator=generator
                 )
                 # uses id 1, ignores id 2 just to be able to insert it better into the CAS
                 output_images[1] = ImageType(

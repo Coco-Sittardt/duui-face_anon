@@ -27,7 +27,6 @@ public class AnonTest {
     static DUUIComposer composer;
     static JCas cas;
 
-//    static String url = "http://isengart.hucompute.org:9991";
     static String url = "http://127.0.0.1:8001";
     static String inputPath = "resources/input";
     static String sOutputPath = "resources/output";
@@ -36,6 +35,9 @@ public class AnonTest {
     @BeforeAll
     static void beforeAll() throws Exception {
         hf_token = System.getenv("HF_TOKEN");
+        if (hf_token == null) {
+            throw new IllegalStateException("HF_TOKEN environment variable is not set");
+        }
         composer = new DUUIComposer()
                 .withSkipVerification(true)
                 .withLuaContext(new DUUILuaContext().withJsonLibrary());
@@ -58,8 +60,9 @@ public class AnonTest {
     public void afterEach() throws Exception {
         composer.resetPipeline();
 
-        readImagesInCas();
+
         cas.reset();
+        
     }
 
 
@@ -98,10 +101,11 @@ public class AnonTest {
             BufferedImage image = ImageIO.read(inputStream);
 
             // Save the image to the specified output file
-            File outputFile = new File(sOutputPath + "/" +currentDateTime.format(formatter) + ".png");
+            File outputFile = new File(sOutputPath + "/" + currentDateTime.format(formatter) + "_" + name + ".png");
             ImageIO.write(image, "png", outputFile);
 
-            System.out.println("Image saved as: " + sOutputPath+name);
+            System.out.println("Image saved as: " + outputFile.getAbsolutePath());
+
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -127,12 +131,15 @@ public class AnonTest {
                 image.addToIndexes();
             }
         }
+        cas.createView("output");
+
     }
 
-    public void readImagesInCas() {
+    public void readImagesInCas(String name) throws Exception {
         int i = 0;
-        for (Image image : JCasUtil.select(cas, Image.class)){
-            saveBase64ToImage(image.getSrc(), String.valueOf(i));
+        JCas view = cas.getView("output");
+        for (Image image : JCasUtil.select(view, Image.class)){
+            saveBase64ToImage(image.getSrc(), name + String.valueOf(i));
             String result = "Image %d is has specified: \n Height: %d; Width: %d".formatted(i, image.getHeight(), image.getWidth());
             System.out.println(result);
         }
@@ -155,12 +162,18 @@ public class AnonTest {
                         .withParameter("anon_type", "single_align")
                         .withParameter("vis_input", "true")
                         .withParameter("hf_token", hf_token)
+                        // to read from 
+                        //.withSourceView("initalview")
+                        // to write to 
+                        .withTargetView("output")
                         .build().withTimeout(1000)
 
         );
 
         createCas();
         composer.run(cas);
+        readImagesInCas("single face");
+
     }
 
 
@@ -172,11 +185,16 @@ public class AnonTest {
                         .withParameter("anon_type", "multiple_align")
                         .withParameter("vis_input", "true")
                         .withParameter("hf_token", hf_token)
+        
+                        // to write to 
+                        .withTargetView("output")
                         .build().withTimeout(1000)
         );
 
         createCas();
         composer.run(cas);
+        readImagesInCas("multiple");
+
     }
 
     @Test
@@ -186,11 +204,14 @@ public class AnonTest {
                         .withParameter("anon_type", "swap")
                         .withParameter("vis_input", "true")
                         .withParameter("hf_token", hf_token)
+                        .withTargetView("output")
                         .build().withTimeout(1000)
         );
 
         createCas(); // needs exactly 2 images loaded in the CAS
         composer.run(cas);
+        readImagesInCas("simple");
+
     }
 
     @Test
@@ -201,11 +222,14 @@ public class AnonTest {
                         .withParameter("redact_type", "blur")
                         .withParameter("blur", "51")
                         .withParameter("hf_token", hf_token)
+                        .withTargetView("output")
                         .build().withTimeout(1000)
         );
 
         createCas();
         composer.run(cas);
+        readImagesInCas("bur");
+
     }
 
     @Test
@@ -216,11 +240,14 @@ public class AnonTest {
                         .withParameter("redact_type", "pixel")
                         .withParameter("pixel", "10")
                         .withParameter("hf_token", hf_token)
+                        .withTargetView("output")
                         .build().withTimeout(1000)
         );
 
         createCas();
         composer.run(cas);
+        readImagesInCas("pixel");
+
     }
     @Test
     public void testBlackOut()throws Exception{
@@ -230,24 +257,29 @@ public class AnonTest {
                         .withParameter("redact_type", "black")
                         .withParameter("pixel", "10")
                         .withParameter("hf_token", hf_token)
+                        .withTargetView("output")
                         .build().withTimeout(1000)
         );
 
         createCas();
         composer.run(cas);
-    }
-    @Test
-    public void testMissingHfTokenFails() throws Exception {
-        composer.add(
-                new DUUIRemoteDriver.Component(url)
-                        .withParameter("anon_type", "single_align")
-                        .build().withTimeout(1000)
-        );
+        readImagesInCas("blackout");
 
-        createCas();
-        composer.run(cas);
-        // todo does it contain the errors? and how do i see them
     }
+//    @Test
+//    public void testMissingHfTokenFails() throws Exception {
+//        composer.add(
+//                new DUUIRemoteDriver.Component(url)
+//                        .withParameter("anon_type", "single_align")
+//                        .build().withTimeout(1000)
+//        );
+//
+//        createCas();
+//        composer.run(cas);
+//        // todo does it contain the errors? and how do i see them
+//        readImagesInCas("noHF");
+//
+//    }
 
 
     @Test
@@ -256,6 +288,7 @@ public class AnonTest {
                 new DUUIRemoteDriver.Component(url)
                         .withParameter("anon_type", "single_align")
                         .withParameter("hf_token", hf_token)
+                        .withTargetView("output")
                         .build().withTimeout(1000)
         );
 
@@ -263,6 +296,8 @@ public class AnonTest {
         cas.setDocumentText("placeholder");
 
         composer.run(cas);
+        readImagesInCas("noImg");
+
     }
 
 
@@ -272,11 +307,13 @@ public class AnonTest {
                 new DUUIRemoteDriver.Component(url)
                         .withParameter("anon_type", "swap")
                         .withParameter("hf_token", hf_token)
+                        .withTargetView("output")
                         .build().withTimeout(1000)
         );
 
         createCas();
         composer.run(cas);
+        readImagesInCas("testSwap");
 
     }
 }

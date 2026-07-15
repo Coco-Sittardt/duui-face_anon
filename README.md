@@ -55,7 +55,7 @@ Requires the [Docker Unified UIMA Interface (DUUI)](https://github.com/texttechn
   pdf       = {https://aclanthology.org/2023.findings-emnlp.29.pdf}
 }
 
-@misc{abusaleh:2025,
+@misc{sittardt:2025,
   author         = {Sittardt, Coco},
   title          = {Simple Face Anonymization as {DUUI} Component},
   year           = {2026},
