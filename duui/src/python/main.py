@@ -19,11 +19,11 @@ from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from starlette.responses import JSONResponse, PlainTextResponse
 from diffusers import AutoencoderKL, DDPMScheduler
-from diffusers_custom.models.referencenet.referencenet_unet_2d_condition import (
+from custom_referencenet.referencenet.referencenet_unet_2d_condition import (
     ReferenceNetModel,
 )
-from diffusers_custom.models.referencenet.unet_2d_condition import UNet2DConditionModel
-from diffusers_custom.pipelines.referencenet.pipeline_referencenet import (
+from diffusers import UNet2DConditionModel
+from custom_referencenet.referencenet.pipeline_referencenet import (
     StableDiffusionReferenceNetPipeline,
 )
 from utils.anonymize_faces_in_image import anonymize_faces_in_image

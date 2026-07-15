@@ -34,12 +34,38 @@ It supports:
 Requires the [Docker Unified UIMA Interface (DUUI)](https://github.com/texttechnologylab/DockerUnifiedUIMAInterface).
 
 ### Start Docker Container
-
-...
+1. 
+out of `duui\src\`
+```bash
+docker  build -f docker/Dockerfile -t face-anon .
+```
+2. 
+```bash
+docker run face-anon
+```
 
 ## Use within DUUI
+Examplary usage, see more examples in the `src/test/java/AnonTest.java` file.
 
+```java
 
+    @Test
+    public void testSingleFaceSimple() throws Exception {
+        composer.add(
+                new DUUIRemoteDriver.Component("http://127.0.0.1:8001")
+                        .withParameter("anon_type", "single_align")
+                        .withParameter("hf_token", hf_token) // the anonymization WILL fail, if no hugging face token is provided!
+                        .withTargetView("output") // to easily iterate through the output images - save them in a seperate view
+                        .build().withTimeout(1000)
+
+        );
+
+        createCas();
+        composer.run(cas);
+        readImagesInCas("single face");
+
+    }
+```
 
 ## BibTex
 ```bibtex

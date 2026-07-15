@@ -162,9 +162,6 @@ public class AnonTest {
                         .withParameter("anon_type", "single_align")
                         .withParameter("vis_input", "true")
                         .withParameter("hf_token", hf_token)
-                        // to read from 
-                        //.withSourceView("initalview")
-                        // to write to 
                         .withTargetView("output")
                         .build().withTimeout(1000)
 
