@@ -36,7 +36,7 @@ function serialize(inputCas, outputStream, parameters)
     local width = parameters["width"] if parameters["width"]==nil then width = tonumber(height) end
 
 
-    --print(anon_type..redact_type..blur..pixel..diffusion_model..clip_model..seed..guidance..inference_steps..anon_degree..vis_input..height..width)
+    print(anon_type..redact_type..blur..pixel..diffusion_model..clip_model..seed..guidance..inference_steps..anon_degree..vis_input..height..width)
      
 
 
@@ -81,8 +81,7 @@ function deserialize(inputCas, inputStream)
     print("start deserialize")
     local inputString = luajava.newInstance("java.lang.String", inputStream:readAllBytes(), StandardCharsets.UTF_8)
     local results = json.decode(inputString)
-    --print("results")
-    --print(results)
+    print(results)
 
     if results['out_errors'] ~= nil then
         local errors = results['out_errors']
@@ -93,27 +92,7 @@ function deserialize(inputCas, inputStream)
             warning_i:addToIndexes()
         end
     end
-    -- metadata
-     --if results['model_source'] ~= nil and results['model_version'] ~= nil and results['model_name'] ~= nil and results['model_lang'] ~= nil then
-     --   --print("GetInfo")
-     --   local source = results["model_source"]
-     --   local model_version = results["model_version"]
-     --   local model_name = results["model_name"]
-     --   local model_lang = results["model_lang"]
-     --
-     --   --print("setMetaData")
-     --   local model_meta = luajava.newInstance("org.texttechnologylab.annotation.model.MetaData", inputCas)
-     --   model_meta:setModelVersion(model_version)
-     --   --         print(model_version)
-     --   model_meta:setModelName(model_name)
-     --   --         print(model_name)
-     --   model_meta:setSource(source)
-     --   --         print(source)
-     --   model_meta:setLang(model_lang)
-     --   --         print(model_lang)
-     --   model_meta:addToIndexes()
 
-    --end
     -- anonymiyed images
     if results['output_images'] ~= nil then
         local output_images = results['output_images']

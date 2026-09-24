@@ -28,7 +28,7 @@ from custom_referencenet.referencenet.pipeline_referencenet import (
 )
 from utils.anonymize_faces_in_image import anonymize_faces_in_image
 from utils.redact_faces import redact_faces_in_image
-
+from duui_logging import log_info, log_warn, log_error
 
 
 # --- duui communication classes
@@ -340,6 +340,10 @@ app = FastAPI(
             "url": "http://www.gnu.org/licenses/agpl-3.0.en.html",
         },
 )
+
+duui_logging.add_logging(app)
+duui_logging.install(level=logging.INFO)
+
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request, exc):
     logger.error(f"Validation error on {request.url}: {exc.errors()}")
@@ -382,7 +386,7 @@ def post_process(request:DUUIRequest)-> DUUIResponse:
 
 
     """
-    print(request)
+    log_info(request)
     # the base selection between which anonymization is run
     anon_type = request.anon_type
     # the amount of anonymization
@@ -480,6 +484,7 @@ def post_process(request:DUUIRequest)-> DUUIResponse:
 
                 if len(images) != 2:
                     errors_out.append("To swap two faces an input of exactly two images is required.")
+                    log_error(f"You have passed a total number of {len(images)} images. To swap you need to pass exactly 2.")
                     raise ValueError(
                         f"You have passed a total number of {len(images)} images. To swap you need to pass exactly 2.")
                 ids = list(images.values()) # work around
