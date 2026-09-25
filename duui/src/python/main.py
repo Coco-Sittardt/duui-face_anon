@@ -9,6 +9,7 @@ from pydantic import BaseModel
 import face_alignment
 import torch
 import gc
+import inspect
 
 
 from fastapi.encoders import jsonable_encoder
@@ -22,13 +23,12 @@ from diffusers import AutoencoderKL, DDPMScheduler
 from custom_referencenet.referencenet.referencenet_unet_2d_condition import (
     ReferenceNetModel,
 )
-from diffusers import UNet2DConditionModel
+from custom_referencenet.referencenet.unet_2d_condition import UNet2DConditionModel
 from custom_referencenet.referencenet.pipeline_referencenet import (
     StableDiffusionReferenceNetPipeline,
 )
 from utils.anonymize_faces_in_image import anonymize_faces_in_image
 from utils.redact_faces import redact_faces_in_image
-from duui_logging import log_info, log_warn, log_error
 
 
 # --- duui communication classes
@@ -284,25 +284,29 @@ def load_pipeline(clip_model, diffusion_model, seed, token):
     )
     face_model_id = "hkung/face-anon-simple"
     unet = UNet2DConditionModel.from_pretrained(
-        face_model_id, subfolder="unet", use_safetensors=True, token=token, torch_dtype=torch.float16
+        face_model_id, subfolder="unet", use_safetensors=True, token=token
     )
+
     referencenet = ReferenceNetModel.from_pretrained(
-        face_model_id, subfolder="referencenet", use_safetensors=True, token=token, torch_dtype=torch.float16
+        face_model_id, subfolder="referencenet", use_safetensors=True, token=token
     )
     conditioning_referencenet = ReferenceNetModel.from_pretrained(
-        face_model_id, subfolder="conditioning_referencenet", use_safetensors=True, token=token, torch_dtype=torch.float16
+        face_model_id, subfolder="conditioning_referencenet", use_safetensors=True, token=token
     )
+    #vae = AutoencoderKL.from_pretrained(
+    #    diffusion_model, subfolder="vae", use_safetensors=True,token=token, torch_dtype=torch.float16
+    #)
     vae = AutoencoderKL.from_pretrained(
-        diffusion_model, subfolder="vae", use_safetensors=True,token=token, torch_dtype=torch.float16
+            diffusion_model, subfolder="vae", use_safetensors=True,token=token
     )
     scheduler = DDPMScheduler.from_pretrained(
         diffusion_model, subfolder="scheduler", use_safetensors=True, token=token)
 
     feature_extractor = CLIPImageProcessor.from_pretrained(
-        clip_model, use_safetensors=True, token=token, torch_dtype=torch.float16
+        clip_model, use_safetensors=True, token=token
     )
     image_encoder = CLIPVisionModel.from_pretrained(
-        clip_model, use_safetensors=True, token=token, torch_dtype=torch.float16
+        clip_model, use_safetensors=True, token=token
     )
 
 
@@ -340,9 +344,6 @@ app = FastAPI(
             "url": "http://www.gnu.org/licenses/agpl-3.0.en.html",
         },
 )
-
-duui_logging.add_logging(app)
-duui_logging.install(level=logging.INFO)
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request, exc):
@@ -386,7 +387,6 @@ def post_process(request:DUUIRequest)-> DUUIResponse:
 
 
     """
-    log_info(request)
     # the base selection between which anonymization is run
     anon_type = request.anon_type
     # the amount of anonymization
@@ -484,7 +484,6 @@ def post_process(request:DUUIRequest)-> DUUIResponse:
 
                 if len(images) != 2:
                     errors_out.append("To swap two faces an input of exactly two images is required.")
-                    log_error(f"You have passed a total number of {len(images)} images. To swap you need to pass exactly 2.")
                     raise ValueError(
                         f"You have passed a total number of {len(images)} images. To swap you need to pass exactly 2.")
                 ids = list(images.values()) # work around

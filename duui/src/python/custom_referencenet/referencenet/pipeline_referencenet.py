@@ -301,7 +301,12 @@ class StableDiffusionReferenceNetPipeline(DiffusionPipeline):
             device=device
         )
         image_embeds = self.image_encoder(features).pooler_output.unsqueeze(1)
-        latents = self.vae.encode(normalized_image).latent_dist.sample()
+        #latents = self.vae.encode(normalized_image).latent_dist.sample()
+        latents = self.vae.encode(normalized_image.to(self.vae.dtype)).latent_dist.sample()
+
+        # added this 
+        latents = latents.to(dtype)
+
         latents = latents * self.vae.config.scaling_factor
 
         if do_classifier_free_guidance or do_anonymization:
@@ -603,7 +608,8 @@ class StableDiffusionReferenceNetPipeline(DiffusionPipeline):
             self.conditioning_referencenet.to("cpu")
             torch.cuda.empty_cache()
 
-        image = self.vae.decode(latents / self.vae.config.scaling_factor, return_dict=False, generator=generator)[0]
+        image = self.vae.decode(
+           ( latents / self.vae.config.scaling_factor).to(self.vae.dtype), return_dict=False, generator=generator)[0]
 
         do_denormalize = [True] * image.shape[0]
 

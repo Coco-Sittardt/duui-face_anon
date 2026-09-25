@@ -7,7 +7,7 @@ function serialize(inputCas, outputStream, parameters)
     print("start Lua serialzation")
     -- get the parameters or run default
     local hf_token = parameters["hf_token"]if parameters["hf_token"]==nil then hf_token="None" end
-    local anon_type = parameters["anon_type"] if parameters["anon_type"]==nil then anon_type = "single_anon" end
+    local anon_type = parameters["mode"] if parameters["mode"]==nil then anon_type = "single_align" end
 
     -- blur/pixelate/black only work if the selected method it redaction
     -- redaction can be black, pixelate or blur
@@ -32,31 +32,33 @@ function serialize(inputCas, outputStream, parameters)
 
     end
     local vis_input = parameters["vis_input"] if parameters["vis_input"]==nil then vis_input = "False" end
-    local height = parameters["height"] if parameters["height"]==nil then height = tonumber(height) end
-    local width = parameters["width"] if parameters["width"]==nil then width = tonumber(height) end
+    local height = parameters["height"] 
+    --if parameters["height"]==nil then height = tonumber(height) end
+    local width = parameters["width"] 
+    --if parameters["width"]==nil then width = tonumber(width) end
 
 
-    print(anon_type..redact_type..blur..pixel..diffusion_model..clip_model..seed..guidance..inference_steps..anon_degree..vis_input..height..width)
+    print(anon_type..redact_type..blur..pixel..diffusion_model..clip_model..seed..guidance..inference_steps..anon_degree..vis_input..tostring(height)..tostring(width))
      
 
 
     -- input images
 
     local images = {}
-    local number_of_images = 1
-    local image_it = JCasUtil:select(inputCas, Image):iterator()
-    while image_it:hasNext() do
-        local image = image_it:next()
-        images[tostring(number_of_images)] = {
+    local found = JCasUtil:select(inputCas, Image)
+
+    for i=0, found:size()-1 do
+        local image = found:get(i)
+        images[tostring(i + 1)] = {
             src = image:getSrc(),
             height = image:getHeight(),
             width = image:getWidth(),
             begin = image:getBegin(),
             ['end'] = image:getEnd()
         }
-        number_of_images = number_of_images + 1
     end
-    print(images)
+    local number_of_images = found:size()
+    print(number_of_images)
     outputStream:write(json.encode({
         anon_type = anon_type,
         anon_degree = anon_degree,
